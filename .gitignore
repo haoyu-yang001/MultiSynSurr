@@ -1,0 +1,6 @@
+.Rproj.user
+.Rhistory
+.RData
+*.tar.gz
+MultiSynSurr.Rcheck/
+inst/doc

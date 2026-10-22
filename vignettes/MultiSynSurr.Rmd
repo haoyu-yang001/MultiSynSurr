@@ -1,0 +1,66 @@
+---
+title: "Introduction to MultiSynSurr"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to MultiSynSurr}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## The problem
+
+A target phenotype, such as a metabolite, is measured on only part of a cohort.
+Complete-case analysis of its association with an exposure uses only the
+participants who have it. Synthetic surrogate (SynSurr) analysis gains precision
+by modelling the target jointly with a *synthetic phenotype*, a prediction of
+the target from other variables (*surrogates*), which is available where the
+target is missing. MultiSynSurr uses several synthetic phenotypes built from
+different surrogates, each available on its own subset, as separate outcomes of
+one multivariate model.
+
+## Example
+
+`msr_simulate()` generates a cohort in which 30% of participants are assayed and
+have a first synthetic phenotype `S1` (accurate), a quarter of them have the
+target measured, and everyone has a second synthetic phenotype `S2` (weaker).
+
+```{r}
+library(MultiSynSurr)
+d <- msr_simulate(n = 10000, seed = 1)
+colMeans(!is.na(cbind(target = d$target, d$synthetic)))
+```
+
+Fit MultiSynSurr with both synthetic phenotypes and test the exposure:
+
+```{r}
+fit <- msr(d$target, d$synthetic, d$X)
+fit
+msr_test(fit, "exposure")
+```
+
+Compare with complete-case least squares and with the precision gain predicted
+from the fitted covariance and the missingness patterns:
+
+```{r}
+o <- !is.na(d$target)
+cc <- summary(lm(d$target[o] ~ d$X[o, ]))$coefficients
+se_cc <- cc[nrow(cc), "Std. Error"]
+c(observed = msr_test(fit, "exposure")[["se"]] / se_cc,
+  predicted = sqrt(msr_expected_ratio(fit)))
+```
+
+## Points to observe
+
+* Each synthetic phenotype must be built the same way for every participant and
+  must not use the variable whose association is tested. Its accuracy affects
+  only the precision, not the validity.
+* Pass synthetic phenotypes built from different surrogates as separate columns.
+  Merging them into one column makes the synthetic phenotype a different
+  variable where the target is measured than where it is missing, and biases the
+  estimate.
+* The model assumes the target is missing at random given the design and the
+  synthetic phenotypes.

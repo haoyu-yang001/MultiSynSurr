@@ -1,0 +1,27 @@
+Package: MultiSynSurr
+Type: Package
+Title: Synthetic Surrogate Regression with Several Synthetic Phenotypes
+Version: 0.1.0
+Authors@R: person("Haoyu", "Yang", email = "haoyuyang@hsph.harvard.edu", role = c("aut", "cre"))
+Description: Association testing for a partially measured outcome (for example a
+    metabolite measured on only some participants) that borrows strength from
+    one or more synthetic phenotypes: predictions of the outcome from different
+    sets of surrogates, each available on its own subset of participants. The
+    outcome and the synthetic phenotypes are regressed jointly on a common design
+    as separate outcomes of a multivariate normal model with missingness in every
+    outcome (MultiSynSurr), extending synthetic surrogate (SynSurr) analysis
+    (McCaw et al. 2024, Nature Genetics 56:1527-1536) to several synthetic
+    phenotypes. Coefficients are estimated by generalised least squares given the
+    residual covariance, which is estimated by profile maximum likelihood with a
+    finite-sample correction; inference on the outcome does not depend on the
+    accuracy of the synthetic phenotypes.
+License: GPL (>= 3)
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports: stats
+Suggests: testthat (>= 3.0.0), knitr, rmarkdown, SurrogateRegression
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+URL: https://github.com/haoyu-yang001/MultiSynSurr
+BugReports: https://github.com/haoyu-yang001/MultiSynSurr/issues
+Config/roxygen2/version: 8.1.1
