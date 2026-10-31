@@ -55,7 +55,11 @@ residual covariance \eqn{\Omega}, which is estimated by profile maximum
 likelihood (Cholesky parametrisation, BFGS). With `df_correct = TRUE` the
 maximum-likelihood \eqn{\Omega} is corrected for the degrees of freedom used
 by the design, factor by factor in the ordering of the outcomes by
-availability; the coefficient estimates are unchanged. Wald tests of the
+availability; the coefficient estimates are unchanged. The covariance of two
+synthetic phenotypes that no participant has together is not identified;
+before the correction it is set to
+\eqn{\Omega_{Ta}\Omega_{Tb}/\Omega_{TT}} (independence given the target), so
+the result does not depend on the optimiser's starting value. Wald tests of the
 target's coefficients are referred to a t distribution with
 \eqn{n_{obs} - p - K_{obs}} degrees of freedom, where \eqn{n_{obs}} is the
 number of participants with the target, \eqn{p} the number of design columns

@@ -54,3 +54,21 @@ test_that("bad input is rejected", {
   expect_error(msr(d$target, d$synthetic, cbind(d$X, d$X[, 1])), "full rank")
   expect_error(msr_test(msr(d$target, d$synthetic, d$X), "nope"), "unknown term")
 })
+
+test_that("synthetic phenotypes never observed together do not make the fit depend on the start", {
+  d <- msr_simulate(n = 4000, seed = 9)
+  half <- seq_along(d$target) <= 2000
+  S <- cbind(d$synthetic, S3 = d$synthetic[, "S2"] + stats::rnorm(length(d$target)))
+  S[half, "S2"] <- NA; S[!half, "S3"] <- NA       # S2 and S3 on disjoint halves
+  st0 <- diag(4)
+  st1 <- st0; st1[3, 4] <- st1[4, 3] <- 0.5
+  f0 <- msr(d$target, S, d$X, start = st0)
+  f1 <- msr(d$target, S, d$X, start = st1)
+  expect_true(f0$converged && f1$converged)
+  expect_equal(f0$vcov, f1$vcov, tolerance = 1e-5)
+  expect_equal(msr_test(f0, "exposure"), msr_test(f1, "exposure"), tolerance = 1e-5)
+  ## before the finite-sample correction the pair is independent given the target
+  f2 <- msr(d$target, S, d$X, df_correct = FALSE)
+  Om <- f2$Omega
+  expect_equal(Om["S2", "S3"], Om["target", "S2"] * Om["target", "S3"] / Om["target", "target"])
+})

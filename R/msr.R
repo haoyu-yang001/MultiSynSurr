@@ -21,7 +21,11 @@
 #' likelihood (Cholesky parametrisation, BFGS). With `df_correct = TRUE` the
 #' maximum-likelihood \eqn{\Omega} is corrected for the degrees of freedom used
 #' by the design, factor by factor in the ordering of the outcomes by
-#' availability; the coefficient estimates are unchanged. Wald tests of the
+#' availability; the coefficient estimates are unchanged. The covariance of two
+#' synthetic phenotypes that no participant has together is not identified;
+#' before the correction it is set to
+#' \eqn{\Omega_{Ta}\Omega_{Tb}/\Omega_{TT}} (independence given the target), so
+#' the result does not depend on the optimiser's starting value. Wald tests of the
 #' target's coefficients are referred to a t distribution with
 #' \eqn{n_{obs} - p - K_{obs}} degrees of freedom, where \eqn{n_{obs}} is the
 #' number of participants with the target, \eqn{p} the number of design columns
@@ -100,7 +104,7 @@ msr <- function(target, synthetic, X, intercept = TRUE, df_correct = TRUE,
   }
   op <- stats::optim(msr_th(start), prof, method = "BFGS",
                      control = list(maxit = 1000, reltol = reltol))
-  Om <- msr_om(op$par, q)
+  Om <- msr_fill(msr_om(op$par, q), st)
   if (df_correct) Om <- msr_df_correct(Om, st, ncol(X))
   gl <- msr_gls(st, Om)
   V <- chol2inv(gl$chol)
@@ -255,6 +259,18 @@ msr_om <- function(th, q) {
 }
 msr_th <- function(Om) {
   L <- t(chol(Om)); diag(L) <- log(diag(L)); L[lower.tri(L, TRUE)]
+}
+
+## The covariance of two outcomes never observed together (e.g. two synthetic
+## phenotypes built for disjoint sets of participants) is not identified and does
+## not enter the likelihood or the GLS; set it to the value making them independent
+## given the target, so the finite-sample correction does not depend on where the
+## optimiser left it. Kept as is if the filled matrix is not positive definite.
+msr_fill <- function(Om, st) {
+  co <- Reduce(`|`, lapply(st, function(g) outer(g$o, g$o)))
+  if (all(co)) return(Om)
+  Fl <- Om; Fl[!co] <- (outer(Om[, 1], Om[, 1]) / Om[1, 1])[!co]
+  if (min(eigen(Fl, symmetric = TRUE, only.values = TRUE)$values) > 0) Fl else Om
 }
 
 ## Finite-sample correction of the MLE of Omega, factor by factor in the ordering
