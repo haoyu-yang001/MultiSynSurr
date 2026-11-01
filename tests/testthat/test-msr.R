@@ -72,3 +72,20 @@ test_that("synthetic phenotypes never observed together do not make the fit depe
   Om <- f2$Omega
   expect_equal(Om["S2", "S3"], Om["target", "S2"] * Om["target", "S3"] / Om["target", "target"])
 })
+
+test_that("robust covariance reduces to HC1 when the target and the synthetic phenotype are never observed together", {
+  set.seed(3)
+  n <- 300; X <- cbind(1, x = rnorm(n), e = rnorm(n))
+  y <- drop(X %*% c(0, 0.3, 0)) + rnorm(n) * exp(0.4 * X[, 3])
+  s <- y + rnorm(n); y[sample(n, 150)] <- NA
+  s0 <- s; s0[!is.na(y)] <- NA                    # target block decouples: GLS = OLS on the labelled
+  f0 <- msr(y, s0, X, intercept = FALSE, robust = TRUE)
+  o <- !is.na(y); l <- lm.fit(X[o, ], y[o]); Xi <- chol2inv(qr.R(l$qr))
+  hc1 <- Xi %*% crossprod(X[o, ] * l$residuals) %*% Xi * sum(o) / (sum(o) - 3)
+  expect_equal(unname(f0$vcov_robust), unname(hc1), tolerance = 1e-8)
+  f <- msr(y, s, X, intercept = FALSE, robust = TRUE)
+  expect_equal(dim(f$vcov_robust), c(3L, 3L))
+  r <- msr_test(f, "e", robust = TRUE)
+  expect_true(r[["se"]] > 0 && r[["p"]] > 0 && r[["p"]] <= 1)
+  expect_error(msr_test(msr(y, s, X, intercept = FALSE), robust = TRUE))
+})

@@ -1,7 +1,7 @@
 Package: MultiSynSurr
 Type: Package
 Title: Synthetic Surrogate Regression with Several Synthetic Phenotypes
-Version: 0.1.1
+Version: 0.1.2
 Authors@R: person("Haoyu", "Yang", email = "haoyuyang@hsph.harvard.edu", role = c("aut", "cre"))
 Description: Association testing for a partially measured outcome (for example a
     metabolite measured on only some participants) that borrows strength from

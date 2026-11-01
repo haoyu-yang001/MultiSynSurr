@@ -21,7 +21,7 @@
 #' likelihood (Cholesky parametrisation, BFGS). With `df_correct = TRUE` the
 #' maximum-likelihood \eqn{\Omega} is corrected for the degrees of freedom used
 #' by the design, factor by factor in the ordering of the outcomes by
-#' availability; the coefficient estimates are unchanged. The covariance of two
+#' availability; the coefficient estimates are unchanged when the missingness patterns are monotone, otherwise changed negligibly. The covariance of two
 #' synthetic phenotypes that no participant has together is not identified;
 #' before the correction it is set to
 #' \eqn{\Omega_{Ta}\Omega_{Tb}/\Omega_{TT}} (independence given the target), so
@@ -49,12 +49,21 @@
 #' @param start Optional starting value for \eqn{\Omega}; by default the
 #'   per-outcome least-squares residual variances.
 #' @param reltol Relative convergence tolerance of the optimiser.
+#' @param robust Also compute a sandwich (robust) covariance of the target's
+#'   coefficients, `vcov_robust`: \eqn{A^{-1} M A^{-1}} with \eqn{A} the
+#'   generalised least-squares information and \eqn{M} the sum over participants
+#'   of the outer products of their score contributions, scaled by
+#'   \eqn{n_{obs}/(n_{obs} - p - K_{obs})}. It remains valid when the residual
+#'   covariance depends on the design (for example a nonlinear relation between
+#'   the target and a synthetic phenotype); with no synthetic phenotype it is the
+#'   HC1 estimator of least squares. Use it with `msr_test(robust = TRUE)`.
 #' @return An object of class `"msr"`: a list with the coefficient matrix
 #'   `coefficients` (one column per outcome, the target first), their covariance
 #'   `vcov`, the residual covariance `Omega` and correlation `cor`, the degrees
 #'   of freedom `df` of the target's Wald tests, `n` (participants with any
 #'   outcome), `n_obs` (participants with the target), the missingness
-#'   `patterns`, `converged` and `loglik`.
+#'   `patterns`, `converged`, `loglik` and, with `robust = TRUE`, `vcov_robust`
+#'   (the target's coefficients only).
 #' @seealso [msr_test()], [msr_expected_ratio()], [msr_simulate()].
 #' @references McCaw ZR, Gao J, Lin X, Gronsbell J (2024). Synthetic surrogates
 #'   improve power for genome-wide association studies of partially missing
@@ -66,7 +75,7 @@
 #' msr_test(fit, "exposure")
 #' @export
 msr <- function(target, synthetic, X, intercept = TRUE, df_correct = TRUE,
-                start = NULL, reltol = 1e-10) {
+                start = NULL, reltol = 1e-10, robust = FALSE) {
   cl <- match.call()
   target <- as.numeric(target)
   n <- length(target)
@@ -114,10 +123,16 @@ msr <- function(target, synthetic, X, intercept = TRUE, df_correct = TRUE,
   dimnames(Om) <- list(colnames(W), colnames(W))
   n_obs <- sum(vapply(st, function(g) if (g$o[1]) g$n else 0, numeric(1)))
   k_obs <- sum(Reduce(`|`, lapply(st, function(g) if (g$o[1]) g$o[-1] else rep(FALSE, q - 1))))
+  df <- n_obs - ncol(X) - k_obs
+  Vr <- NULL
+  if (robust) {
+    Vr <- msr_robust(W, X, gl$B, V, Om, n_obs, df)
+    dimnames(Vr) <- list(colnames(X), colnames(X))
+  }
   structure(list(coefficients = gl$B, vcov = V, Omega = Om, cor = stats::cov2cor(Om),
-                 df = n_obs - ncol(X) - k_obs, n = sum(vapply(st, `[[`, numeric(1), "n")),
+                 df = df, n = sum(vapply(st, `[[`, numeric(1), "n")),
                  n_obs = n_obs, patterns = lapply(st, function(g) list(o = g$o, n = g$n)),
-                 converged = op$convergence == 0, loglik = -op$value, call = cl),
+                 converged = op$convergence == 0, loglik = -op$value, vcov_robust = Vr, call = cl),
             class = "msr")
 }
 
@@ -125,16 +140,19 @@ msr <- function(target, synthetic, X, intercept = TRUE, df_correct = TRUE,
 #'
 #' @param fit An `"msr"` fit.
 #' @param term Name or index of a design column; by default the last one.
+#' @param robust Use the sandwich covariance (fit with `msr(robust = TRUE)`).
 #' @return A named numeric vector: estimate, standard error, t statistic,
 #'   degrees of freedom and two-sided p-value (t reference).
 #' @examples
 #' d <- msr_simulate(n = 3000, seed = 1)
 #' msr_test(msr(d$target, d$synthetic, d$X), "exposure")
 #' @export
-msr_test <- function(fit, term = nrow(fit$coefficients)) {
+msr_test <- function(fit, term = nrow(fit$coefficients), robust = FALSE) {
   if (is.character(term)) term <- match(term, rownames(fit$coefficients))
   if (is.na(term) || term < 1 || term > nrow(fit$coefficients)) stop("unknown term")
-  b <- fit$coefficients[term, 1]; se <- sqrt(fit$vcov[term, term])
+  if (robust && is.null(fit$vcov_robust)) stop("refit with msr(robust = TRUE)")
+  b <- fit$coefficients[term, 1]
+  se <- sqrt(if (robust) fit$vcov_robust[term, term] else fit$vcov[term, term])
   t <- b / se
   c(estimate = unname(b), se = se, t = unname(t), df = fit$df, p = 2 * stats::pt(-abs(t), fit$df))
 }
@@ -205,6 +223,22 @@ msr_simulate <- function(n = 5000, p_assayed = 0.3, p_measured = 0.25, beta = 0.
 
 ## ---- internals ---------------------------------------------------------------------
 
+## Sandwich covariance of the target's coefficients: A^{-1} M A^{-1}, A the GLS information
+## (V = A^{-1}), M = sum_i u_i u_i' with u_i = vec(x_i t_i'), t_i = M_g(i) r_i the precision-
+## weighted residuals of participant i's observed outcomes (0 elsewhere); scaled by n_obs / df.
+## Only the target's block is formed: column j of S is u_i' A^{-1} e_j.
+msr_robust <- function(W, X, B, V, Om, n_obs, df) {
+  R <- !is.na(W); keep <- rowSums(R) > 0
+  W <- W[keep, , drop = FALSE]; X <- X[keep, , drop = FALSE]; R <- R[keep, , drop = FALSE]
+  E <- W - X %*% B; E[!R] <- 0
+  code <- drop(R %*% 2^(seq_len(ncol(W)) - 1))
+  Tm <- E
+  for (i in split(seq_len(nrow(W)), code)) Tm[i, ] <- E[i, , drop = FALSE] %*% msr_prec(Om, R[i[1], ])
+  p <- ncol(X); q <- ncol(W)
+  S <- vapply(seq_len(p), function(j) rowSums(Tm * (X %*% matrix(V[, j], p, q))), numeric(nrow(X)))
+  crossprod(matrix(S, ncol = p)) * n_obs / df
+}
+
 ## Sufficient statistics by missingness pattern. W: n x q outcomes (column 1 the
 ## target), NA where missing; X: n x p design. Rows with no outcome are dropped.
 msr_stats <- function(W, X) {
@@ -267,7 +301,7 @@ msr_th <- function(Om) {
 ## given the target, so the finite-sample correction does not depend on where the
 ## optimiser left it. Kept as is if the filled matrix is not positive definite.
 msr_fill <- function(Om, st) {
-  co <- Reduce(`|`, lapply(st, function(g) outer(g$o, g$o)))
+  co <- Reduce(`|`, lapply(st, function(g) outer(g$o, g$o, "&")))
   if (all(co)) return(Om)
   Fl <- Om; Fl[!co] <- (outer(Om[, 1], Om[, 1]) / Om[1, 1])[!co]
   if (min(eigen(Fl, symmetric = TRUE, only.values = TRUE)$values) > 0) Fl else Om
@@ -282,7 +316,7 @@ msr_fill <- function(Om, st) {
 msr_df_correct <- function(Om, st, p) {
   q <- nrow(Om)
   n_k <- Reduce(`+`, lapply(st, function(g) g$n * g$o))
-  co  <- Reduce(`|`, lapply(st, function(g) outer(g$o, g$o)))
+  co  <- Reduce(`|`, lapply(st, function(g) outer(g$o, g$o, "&")))
   S   <- seq_len(q)[-1]
   ord <- c(S[order(-n_k[S])], 1L)
   out <- matrix(0, q, q)

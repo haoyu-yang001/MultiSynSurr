@@ -11,7 +11,8 @@ msr(
   intercept = TRUE,
   df_correct = TRUE,
   start = NULL,
-  reltol = 1e-10
+  reltol = 1e-10,
+  robust = FALSE
 )
 }
 \arguments{
@@ -32,6 +33,15 @@ variables), without missing values.}
 per-outcome least-squares residual variances.}
 
 \item{reltol}{Relative convergence tolerance of the optimiser.}
+
+\item{robust}{Also compute a sandwich (robust) covariance of the target's
+coefficients, `vcov_robust`: \eqn{A^{-1} M A^{-1}} with \eqn{A} the
+generalised least-squares information and \eqn{M} the sum over participants
+of the outer products of their score contributions, scaled by
+\eqn{n_{obs}/(n_{obs} - p - K_{obs})}. It remains valid when the residual
+covariance depends on the design (for example a nonlinear relation between
+the target and a synthetic phenotype); with no synthetic phenotype it is the
+HC1 estimator of least squares. Use it with `msr_test(robust = TRUE)`.}
 }
 \value{
 An object of class `"msr"`: a list with the coefficient matrix
@@ -39,7 +49,8 @@ An object of class `"msr"`: a list with the coefficient matrix
   `vcov`, the residual covariance `Omega` and correlation `cor`, the degrees
   of freedom `df` of the target's Wald tests, `n` (participants with any
   outcome), `n_obs` (participants with the target), the missingness
-  `patterns`, `converged` and `loglik`.
+  `patterns`, `converged`, `loglik` and, with `robust = TRUE`, `vcov_robust`
+  (the target's coefficients only).
 }
 \description{
 Regresses a partially measured target and one or more synthetic phenotypes
@@ -55,7 +66,7 @@ residual covariance \eqn{\Omega}, which is estimated by profile maximum
 likelihood (Cholesky parametrisation, BFGS). With `df_correct = TRUE` the
 maximum-likelihood \eqn{\Omega} is corrected for the degrees of freedom used
 by the design, factor by factor in the ordering of the outcomes by
-availability; the coefficient estimates are unchanged. The covariance of two
+availability; the coefficient estimates are unchanged when the missingness patterns are monotone, otherwise changed negligibly. The covariance of two
 synthetic phenotypes that no participant has together is not identified;
 before the correction it is set to
 \eqn{\Omega_{Ta}\Omega_{Tb}/\Omega_{TT}} (independence given the target), so

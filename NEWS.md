@@ -1,3 +1,13 @@
+# MultiSynSurr 0.1.2
+
+* `msr(robust = TRUE)` adds `vcov_robust`, a sandwich covariance of the target's
+  coefficients (generalised least-squares information as bread, participants' score
+  contributions as meat, HC1 scaling), and `msr_test(robust = TRUE)` uses it. It
+  stays valid when the residual covariance depends on the design; without
+  co-observed synthetic phenotypes it is the HC1 estimator of least squares.
+* Documentation: the finite-sample correction leaves the coefficients unchanged for
+  monotone missingness patterns and changes them negligibly otherwise.
+
 # MultiSynSurr 0.1.1
 
 * `msr()`: the covariance of two synthetic phenotypes that no participant has

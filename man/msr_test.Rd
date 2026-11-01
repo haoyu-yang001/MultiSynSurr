@@ -4,12 +4,14 @@
 \alias{msr_test}
 \title{Wald test of a target coefficient}
 \usage{
-msr_test(fit, term = nrow(fit$coefficients))
+msr_test(fit, term = nrow(fit$coefficients), robust = FALSE)
 }
 \arguments{
 \item{fit}{An `"msr"` fit.}
 
 \item{term}{Name or index of a design column; by default the last one.}
+
+\item{robust}{Use the sandwich covariance (fit with `msr(robust = TRUE)`).}
 }
 \value{
 A named numeric vector: estimate, standard error, t statistic,
